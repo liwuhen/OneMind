@@ -161,3 +161,26 @@
   );
   backdrop-filter: blur(16px);
 }
+
+/* 智能体吉祥物动画（类 Marvis） */
+@keyframes mascot-bob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-5px); }
+}
+@keyframes mascot-screen-scan {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 14px; }
+}
+@keyframes mascot-screen-glow {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+@keyframes mascot-float-z {
+  0% { opacity: 0; transform: translateY(2px) scale(0.8); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-22px) scale(1.15); }
+}
+@keyframes mascot-breathe {
+  0%, 100% { transform: translateX(-50%) scaleY(1); }
+  50% { transform: translateX(-50%) scaleY(0.98); }
+}

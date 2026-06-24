@@ -8,9 +8,11 @@ import {
   Moon,
   MessageSquarePlus,
   PanelLeft,
+  Plus,
   RotateCw,
   Settings,
   Sun,
+  Workflow,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { cn } from "@/lib/utils";
@@ -100,6 +102,8 @@ export function WorkspaceSidebar({
   activeId,
   onSelectConversation,
   onNewConversation,
+  onAddAgent,
+  onOpenBoard,
   mode,
   onModeChange,
   isDark,
@@ -115,6 +119,8 @@ export function WorkspaceSidebar({
   activeId: string;
   onSelectConversation: (id: string) => void;
   onNewConversation: () => void;
+  onAddAgent: () => void;
+  onOpenBoard: () => void;
   mode: Mode;
   onModeChange: (m: Mode) => void;
   isDark: boolean;
@@ -138,8 +144,8 @@ export function WorkspaceSidebar({
       >
         {!collapsed && (
           <div className="flex flex-1 items-center gap-2">
-            <BrainCircuit className="size-5 text-cyan-500" />
-            <span className="font-serif text-base font-semibold tracking-tight text-cyan-500">
+            <BrainCircuit className="size-5 rotate-90 text-violet-400" />
+            <span className="font-serif text-base font-semibold tracking-tight text-violet-400">
               OneMind
             </span>
           </div>
@@ -190,33 +196,53 @@ export function WorkspaceSidebar({
 
       {/* 导航菜单 */}
       <nav className="flex flex-col gap-0.5 px-3 pt-1">
-        <NavItem
-          icon={<MessageSquarePlus className="size-4" />}
-          label="新建对话"
-          collapsed={collapsed}
-          onClick={onNewConversation}
-        />
-        <NavItem
-          icon={<History className="size-4" />}
-          label="会话历史"
-          collapsed={collapsed}
-        />
+        {mode === "agent" ? (
+          <NavItem
+            icon={<Plus className="size-4" />}
+            label="添加智能体"
+            collapsed={collapsed}
+            onClick={onAddAgent}
+          />
+        ) : (
+          <NavItem
+            icon={<MessageSquarePlus className="size-4" />}
+            label="新建对话"
+            collapsed={collapsed}
+            onClick={onNewConversation}
+          />
+        )}
+        {mode !== "agent" && (
+          <NavItem
+            icon={<History className="size-4" />}
+            label="会话历史"
+            collapsed={collapsed}
+          />
+        )}
         <NavItem
           icon={<LayoutGrid className="size-4" />}
           label="看板"
           collapsed={collapsed}
+          onClick={onOpenBoard}
         />
+        {mode === "agent" && (
+          <NavItem
+            icon={<Workflow className="size-4" />}
+            label="工作流"
+            collapsed={collapsed}
+          />
+        )}
       </nav>
 
-      {/* 最近会话 */}
+      {/* 最近会话（智能体模式下不显示） */}
       <div className="mt-6 min-h-0 flex-1 overflow-y-auto px-3">
-        {!collapsed && conversations.length > 0 && (
+        {mode !== "agent" && !collapsed && conversations.length > 0 && (
           <div className="mb-1 px-1 text-[11px] font-medium text-muted-foreground/70">
             最近
           </div>
         )}
         <div className="flex flex-col gap-0.5">
-          {!collapsed &&
+          {mode !== "agent" &&
+            !collapsed &&
             conversations.map((c) => {
               const title = conversationTitle(c);
               return (

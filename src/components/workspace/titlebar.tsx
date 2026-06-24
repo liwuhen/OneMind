@@ -38,7 +38,7 @@ export function TitleBar() {
       className="flex h-9 shrink-0 items-center justify-between border-b border-border/30 bg-background select-none"
     >
       <div data-tauri-drag-region className="flex items-center pl-3">
-        <BrainCircuit className="size-4 text-violet-500" />
+        <BrainCircuit className="size-4 rotate-90 text-violet-400" />
       </div>
       <div className="flex h-full">
         <CtrlButton title="最小化" onClick={() => getCurrentWindow().minimize()}>

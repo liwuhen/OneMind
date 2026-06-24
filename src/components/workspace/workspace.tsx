@@ -4,6 +4,8 @@ import { useSettings } from "@/hooks/useSettings";
 import { WorkspaceSidebar, type Mode } from "./workspace-sidebar";
 import { Welcome } from "./welcome";
 import { Settings } from "./settings";
+import { AddAgentView } from "./add-agent-view";
+import { BoardView } from "./board-view";
 import { Conversation } from "@/components/ai-elements/conversation";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,17 @@ export function Workspace() {
 
   // 智能体模式：输入框不带 ⚡ 选择器；大模型模式：带。
   const showSelector = mode === "model";
+
+  // 右侧主区视图：对话 / 添加智能体 / 工作区看板。
+  const [view, setView] = useState<"chat" | "addAgent" | "board">("chat");
+
+  // 已添加的智能体。
+  const [addedAgentIds, setAddedAgentIds] = useState<string[]>([]);
+  const addedAgents = agents.filter((a) => addedAgentIds.includes(a.id));
+  const toggleAgent = (id: string) =>
+    setAddedAgentIds((ids) =>
+      ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
+    );
 
   // 侧栏宽度（可拖拽）
   const [sidebarWidth, setSidebarWidth] = useState(264);
@@ -82,6 +95,8 @@ export function Workspace() {
         activeId={activeId}
         onSelectConversation={selectConversation}
         onNewConversation={newConversation}
+        onAddAgent={() => setView("addAgent")}
+        onOpenBoard={() => setView("board")}
         mode={mode}
         onModeChange={setMode}
         isDark={settings.isDark}
@@ -109,7 +124,18 @@ export function Workspace() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {empty ? (
+        {view === "addAgent" ? (
+          <AddAgentView
+            agents={agents}
+            addedIds={addedAgentIds}
+            onToggle={toggleAgent}
+            onClose={() => setView("chat")}
+            selected={selected}
+            connected={connected}
+          />
+        ) : view === "board" ? (
+          <BoardView onClose={() => setView("chat")} addedAgents={addedAgents} />
+        ) : empty ? (
           <Welcome
             agents={agents}
             selected={selected}

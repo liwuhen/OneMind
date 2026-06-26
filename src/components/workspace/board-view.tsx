@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { AgentInfo } from "@/types";
-import { AgentMascot, MASCOT_ACCENTS } from "./agent-mascot";
+import { Office3D } from "./office-3d";
 
 type Card = { id: string; title: string; agent: string };
 type Column = { id: string; title: string; accent: string; cards: Card[] };
@@ -210,13 +210,13 @@ function AgentSelect({
         </Select>
       </div>
 
-      {/* 吉祥物动画：按所选智能体的任务数渲染多个 */}
-      <AgentMascotGrid agentId={value} agentName={agentName} />
+      {/* 智能体办公室：按任务数渲染坐着工作的工位 */}
+      <AgentOfficeSection agentId={value} agentName={agentName} />
     </div>
   );
 }
 
-function AgentMascotGrid({
+function AgentOfficeSection({
   agentId,
   agentName,
 }: {
@@ -225,38 +225,17 @@ function AgentMascotGrid({
 }) {
   if (!agentId) {
     return (
-      <div className="mt-8">
-        <AgentMascot working={false} label="选择一个智能体开始工作" />
+      <div className="mt-10 text-center text-sm text-muted-foreground">
+        选择一个智能体，查看它的办公室
       </div>
     );
   }
 
   const tasks = mockTasksForAgent(agentId);
 
-  if (tasks.length === 0) {
-    return (
-      <div className="mt-8">
-        <AgentMascot working={false} label={`${agentName} · 空闲中`} />
-      </div>
-    );
-  }
-
   return (
-    <div className="mt-6">
-      <div className="mb-2 text-center text-sm text-muted-foreground">
-        {agentName} · {tasks.length} 个任务进行中
-      </div>
-      <div className="flex flex-wrap justify-center gap-x-2 gap-y-4">
-        {tasks.map((t, i) => (
-          <AgentMascot
-            key={t.id}
-            working
-            label={t.title}
-            index={i}
-            accent={MASCOT_ACCENTS[i % MASCOT_ACCENTS.length]}
-          />
-        ))}
-      </div>
+    <div className="mt-5">
+      <Office3D agentName={agentName} tasks={tasks} />
     </div>
   );
 }

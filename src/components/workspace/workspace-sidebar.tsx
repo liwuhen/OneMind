@@ -170,12 +170,12 @@ export function WorkspaceSidebar({
               className={cn(
                 "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
                 mode === "agent"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-card text-foreground shadow-sm ring-1 ring-border"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <Bot className="size-3.5" />
-              智能体
+              <Bot className="size-3.5 -translate-y-px" />
+              <span className="translate-y-px">智能体</span>
             </button>
             <button
               type="button"
@@ -183,12 +183,12 @@ export function WorkspaceSidebar({
               className={cn(
                 "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
                 mode === "model"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-card text-foreground shadow-sm ring-1 ring-border"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <Cpu className="size-3.5" />
-              大模型
+              <Cpu className="size-3.5 -translate-y-px" />
+              <span className="translate-y-px">大模型</span>
             </button>
           </div>
         </div>

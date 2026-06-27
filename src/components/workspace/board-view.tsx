@@ -148,7 +148,7 @@ const TASK_POOL = [
 
 function mockTasksForAgent(agentId: string): { id: string; title: string }[] {
   const seed = [...agentId].reduce((s, c) => s + c.charCodeAt(0), 0);
-  const count = (seed % 4) + 1; // 1~4 个任务
+  const count = (seed % 6) + 1; // 1~6 个任务
   return Array.from({ length: count }, (_, i) => ({
     id: `${agentId}-t${i}`,
     title: TASK_POOL[(seed + i) % TASK_POOL.length],
@@ -178,7 +178,7 @@ function AgentSelect({
   const agentName = addedAgents.find((a) => a.id === value)?.name ?? "";
 
   return (
-    <div className="px-6 pt-4">
+    <div className="flex h-full min-h-0 flex-col px-6 pt-4">
       <div className="flex items-center gap-3">
         <label className="shrink-0 text-sm font-medium">选择智能体</label>
         <Select value={value} onValueChange={onChange}>
@@ -210,7 +210,6 @@ function AgentSelect({
         </Select>
       </div>
 
-      {/* 智能体办公室：按任务数渲染坐着工作的工位 */}
       <AgentOfficeSection agentId={value} agentName={agentName} />
     </div>
   );
@@ -234,7 +233,7 @@ function AgentOfficeSection({
   const tasks = mockTasksForAgent(agentId);
 
   return (
-    <div className="mt-5">
+    <div className="mt-5 min-h-0 flex-1 self-start w-full lg:w-[65%]">
       <Office3D agentName={agentName} tasks={tasks} />
     </div>
   );

@@ -872,30 +872,35 @@ function makeRand(seed: number) {
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 
-function createBookSpineTexture(title: string, color: string, index: number) {
-  const c = document.createElement("canvas");
-  c.width = 128;
-  c.height = 256;
-  const ctx = c.getContext("2d")!;
-
+/** 在 ctx 的 (ox,oy) 处画一个 128×256 的书脊（供图集复用）。 */
+function drawBookSpine(
+  ctx: CanvasRenderingContext2D,
+  ox: number,
+  oy: number,
+  title: string,
+  color: string,
+  index: number,
+) {
+  const W = 128;
+  const H = 256;
   ctx.fillStyle = color;
-  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.fillRect(ox, oy, W, H);
 
   const shade = new THREE.Color(color).multiplyScalar(0.62).getStyle();
   ctx.fillStyle = shade;
-  ctx.fillRect(0, 0, 14, c.height);
-  ctx.fillRect(c.width - 14, 0, 14, c.height);
-  ctx.fillRect(0, 14, c.width, 10);
-  ctx.fillRect(0, c.height - 24, c.width, 10);
+  ctx.fillRect(ox, oy, 14, H);
+  ctx.fillRect(ox + W - 14, oy, 14, H);
+  ctx.fillRect(ox, oy + 14, W, 10);
+  ctx.fillRect(ox, oy + H - 24, W, 10);
 
   ctx.fillStyle = "rgba(255,255,255,0.78)";
-  ctx.fillRect(28, 44, 72, 128);
+  ctx.fillRect(ox + 28, oy + 44, 72, 128);
   ctx.strokeStyle = "rgba(0,0,0,0.28)";
   ctx.lineWidth = 3;
-  ctx.strokeRect(28, 44, 72, 128);
+  ctx.strokeRect(ox + 28, oy + 44, 72, 128);
 
   ctx.save();
-  ctx.translate(64, 132);
+  ctx.translate(ox + 64, oy + 132);
   ctx.rotate(-Math.PI / 2);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -905,16 +910,11 @@ function createBookSpineTexture(title: string, color: string, index: number) {
   ctx.restore();
 
   ctx.fillStyle = index % 2 ? "#facc15" : "#e5e7eb";
-  ctx.fillRect(38, 188, 52, 12);
+  ctx.fillRect(ox + 38, oy + 188, 52, 12);
   ctx.fillStyle = "rgba(0,0,0,0.34)";
   for (let y = 208; y < 238; y += 8) {
-    ctx.fillRect(36, y, 56, 3);
+    ctx.fillRect(ox + 36, oy + y, 56, 3);
   }
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
 }
 
 /**
@@ -976,8 +976,9 @@ function Bookcase({
         const left = -W / 2 + t + b * bayW + 0.015;
         const right = left + bayW - 0.03;
         let x = left;
-        while (x < right - 0.035) {
-          const bw = 0.03 + rand() * 0.055;
+        while (x < right - 0.05) {
+          // 更宽的书 + 更大间隙 → 书脊数量减少约 ⅓，观感仍饱满。
+          const bw = 0.05 + rand() * 0.06;
           if (x + bw > right) break;
           const bh = innerH * (0.6 + rand() * 0.36);
           const tilt = rand() < 0.1 ? (rand() - 0.5) * 0.28 : 0;
@@ -991,36 +992,101 @@ function Bookcase({
             color: BOOK_COLORS[Math.floor(rand() * BOOK_COLORS.length)],
             title: BOOK_TITLES[Math.floor(rand() * BOOK_TITLES.length)],
           });
-          x += bw + 0.003 + (rand() < 0.07 ? 0.025 : 0);
+          x += bw + 0.006 + (rand() < 0.12 ? 0.03 : 0);
         }
       }
     }
     return out;
   }, [position, W, H, D, rowH, bayW, innerW]);
 
-  const bookMaterials = useMemo(
-    () =>
-      books.map((bk, i) => {
-        const sideMat = new THREE.MeshStandardMaterial({
-          color: new THREE.Color(bk.color).multiplyScalar(0.72),
-          roughness: 0.7,
-          metalness: 0.02,
-        });
-        const pageMat = new THREE.MeshStandardMaterial({
-          color: "#f5ead6",
-          roughness: 0.8,
-          metalness: 0,
-        });
-        const spineMat = new THREE.MeshStandardMaterial({
-          map: createBookSpineTexture(bk.title, bk.color, i),
-          roughness: 0.62,
-          metalness: 0.02,
-        });
+  // 所有书脊画进一张图集，全部书合并成单网格：
+  // 书脊面 UV 指向各自图集格、侧/页面 UV 指向白格并用顶点色着色。
+  // → 整座书柜的书从「N×6 draw call + N 纹理」降到「1 draw call + 1 纹理」。
+  const bookBatch = useMemo(() => {
+    const K = books.length;
+    if (!K) return null;
+    const CW = 128;
+    const CH = 256;
+    const cols = Math.ceil(Math.sqrt(K + 1));
+    const rowsN = Math.ceil((K + 1) / cols);
+    const cv = document.createElement("canvas");
+    cv.width = cols * CW;
+    cv.height = rowsN * CH;
+    const ctx = cv.getContext("2d")!;
+    const cellXY = (idx: number) => ({
+      cx: (idx % cols) * CW,
+      cy: Math.floor(idx / cols) * CH,
+    });
+    books.forEach((bk, i) => {
+      const { cx, cy } = cellXY(i);
+      drawBookSpine(ctx, cx, cy, bk.title, bk.color, i);
+    });
+    const whiteIdx = K;
+    const wr = cellXY(whiteIdx);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(wr.cx, wr.cy, CW, CH);
 
-        return [sideMat, sideMat, pageMat, pageMat, spineMat, spineMat];
-      }),
-    [books],
-  );
+    const texture = new THREE.CanvasTexture(cv);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+
+    const Wc = cv.width;
+    const Hc = cv.height;
+    // flipY 默认 true：UV v=0 对应画布底部，故按 (1 - 像素/高) 反算。
+    const cellUV = (idx: number) => {
+      const { cx, cy } = cellXY(idx);
+      return {
+        u0: cx / Wc,
+        u1: (cx + CW) / Wc,
+        v0: 1 - (cy + CH) / Hc,
+        v1: 1 - cy / Hc,
+      };
+    };
+    const wuv = cellUV(whiteIdx);
+    const whiteU = (wuv.u0 + wuv.u1) / 2;
+    const whiteV = (wuv.v0 + wuv.v1) / 2;
+    const WHITE = new THREE.Color(1, 1, 1);
+    const page = new THREE.Color("#f5ead6");
+
+    const geos: THREE.BufferGeometry[] = [];
+    const mtx = new THREE.Matrix4();
+    const rot = new THREE.Matrix4();
+    books.forEach((bk, i) => {
+      const g = new THREE.BoxGeometry(bk.bw, bk.bh, bk.bd).toNonIndexed();
+      const pos = g.getAttribute("position");
+      const uv = g.getAttribute("uv");
+      const n = pos.count; // 36：每面 6 顶点，顺序 +X,-X,+Y,-Y,+Z,-Z
+      const colors = new Float32Array(n * 3);
+      const side = new THREE.Color(bk.color).multiplyScalar(0.72);
+      const cell = cellUV(i);
+      for (let v = 0; v < n; v++) {
+        const col = v < 12 ? side : v < 24 ? page : WHITE;
+        colors[v * 3] = col.r;
+        colors[v * 3 + 1] = col.g;
+        colors[v * 3 + 2] = col.b;
+        if (v < 24) {
+          uv.setXY(v, whiteU, whiteV); // 侧/页面 → 白格
+        } else {
+          // 书脊面（±Z）→ 本书图集格，按原 box UV 重映射。
+          const u = uv.getX(v);
+          const w = uv.getY(v);
+          uv.setXY(
+            v,
+            cell.u0 + u * (cell.u1 - cell.u0),
+            cell.v0 + w * (cell.v1 - cell.v0),
+          );
+        }
+      }
+      g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      mtx.makeTranslation(bk.x, bk.y, -D * 0.08);
+      rot.makeRotationZ(bk.tilt);
+      g.applyMatrix4(mtx.multiply(rot));
+      geos.push(g);
+    });
+    const geometry = mergeGeometries(geos, false);
+    geos.forEach((g) => g.dispose());
+    return geometry ? { geometry, texture } : null;
+  }, [books, D]);
 
   const woodMat = (
     <meshStandardMaterial color={wood} roughness={0.78} metalness={0.02} />
@@ -1058,19 +1124,17 @@ function Bookcase({
           {woodMat}
         </mesh>
       ))}
-      {/* 书脊 */}
-      {books.map((bk, i) => (
-        <mesh
-          key={i}
-          position={[bk.x, bk.y, -D * 0.08]}
-          rotation={[0, 0, bk.tilt]}
-          castShadow
-          receiveShadow
-          material={bookMaterials[i]}
-        >
-          <boxGeometry args={[bk.bw, bk.bh, bk.bd]} />
+      {/* 书脊：全部合并为单网格 + 图集（1 draw call） */}
+      {bookBatch && (
+        <mesh geometry={bookBatch.geometry} castShadow receiveShadow>
+          <meshStandardMaterial
+            map={bookBatch.texture}
+            vertexColors
+            roughness={0.66}
+            metalness={0.02}
+          />
         </mesh>
-      ))}
+      )}
     </group>
   );
 }

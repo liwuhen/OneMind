@@ -1,5 +1,6 @@
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import {
   ContactShadows,
   RoundedBox,
@@ -239,12 +240,20 @@ function MonitorScreen({
     return { canvas: c, texture: tex, rows };
   }, [seed]);
 
+  const lastDrawRef = useRef(-1);
+
   useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    // 屏幕贴图限速重绘：动态画面（code/cf）~10fps，静态锁屏/桌面 ~2fps。
+    // 否则每帧都会重画 2D 画布并重传纹理，是主线程高 CPU + GC 抖动的主因。
+    const minInterval = mode === "lock" || mode === "windows" ? 0.5 : 0.12;
+    if (t - lastDrawRef.current < minInterval) return;
+    lastDrawRef.current = t;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const W = canvas.width;
     const H = canvas.height;
-    const t = state.clock.elapsedTime;
 
     // 锁屏样式（无人/未起任务）。
     if (mode === "lock") {
@@ -2057,6 +2066,185 @@ function Workstation({
   );
 }
 
+/**
+ * 静态几何合并：场景挂载稳定后（延迟一帧，确保所有 GLTF/子对象已 attach），
+ * 把不透明、无贴图的 Standard/Basic 静态网格按材质合并成少量网格，
+ * 原网格移到 layer 31 → 从颜色与阴影 pass 彻底移除。draw call 数百→个位数。
+ * 排除：SkinnedMesh、透明、带贴图、Physical。GLTF 都是 clone(true)，安全。
+ */
+function StaticMerger({ rev, children }: { rev: string; children: ReactNode }) {
+  const rootRef = useRef<THREE.Group>(null);
+  const outRef = useRef<THREE.Group>(null);
+  const gl = useThree((s) => s.gl);
+  const invalidate = useThree((s) => s.invalidate);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    const out = outRef.current;
+    if (!root || !out) return;
+    let raf2 = 0;
+
+    const disposeOut = () => {
+      while (out.children.length) {
+        const c = out.children.pop() as THREE.Mesh;
+        c.geometry?.dispose();
+        const m = c.material;
+        if (Array.isArray(m)) m.forEach((x) => x.dispose());
+        else m?.dispose();
+      }
+    };
+
+    const run = () => {
+      disposeOut();
+      root.updateWorldMatrix(true, true);
+      const rootInv = root.matrixWorld.clone().invert();
+      const groups = new Map<
+        string,
+        { geos: THREE.BufferGeometry[]; mat: THREE.Material; cast: boolean }
+      >();
+
+      root.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh) || !obj.visible) return;
+        if ((obj as THREE.SkinnedMesh).isSkinnedMesh) return;
+        const mat = obj.material;
+        if (Array.isArray(mat)) return;
+        const isStd =
+          mat instanceof THREE.MeshStandardMaterial &&
+          !(mat instanceof THREE.MeshPhysicalMaterial);
+        const isBasic = mat instanceof THREE.MeshBasicMaterial;
+        if (!isStd && !isBasic) return;
+        const m = mat as THREE.MeshStandardMaterial;
+        if (
+          m.map ||
+          m.alphaMap ||
+          m.normalMap ||
+          m.bumpMap ||
+          m.roughnessMap ||
+          m.metalnessMap ||
+          m.aoMap
+        )
+          return;
+        if (m.transparent) return;
+        if (isStd && (m.emissive.r > 0 || m.emissive.g > 0 || m.emissive.b > 0))
+          return;
+        const src = obj.geometry;
+        if (!src || !src.getAttribute("position")) return;
+
+        const g = src.index ? src.toNonIndexed() : src.clone();
+        for (const name of Object.keys(g.attributes)) {
+          if (name !== "position" && (name !== "normal" || !isStd))
+            g.deleteAttribute(name);
+        }
+        if (isStd && !g.getAttribute("normal")) g.computeVertexNormals();
+        g.applyMatrix4(
+          new THREE.Matrix4().multiplyMatrices(rootInv, obj.matrixWorld),
+        );
+
+        const count = g.getAttribute("position").count;
+        const colors = new Float32Array(count * 3);
+        const { r, g: cg, b } = m.color;
+        for (let i = 0; i < count; i++) {
+          colors[i * 3] = r;
+          colors[i * 3 + 1] = cg;
+          colors[i * 3 + 2] = b;
+        }
+        g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+        const key = isStd
+          ? `std|${m.roughness.toFixed(2)}|${m.metalness.toFixed(2)}|${Number(m.flatShading)}`
+          : `basic|${Number(m.toneMapped)}`;
+        let grp = groups.get(key);
+        if (!grp) {
+          grp = {
+            geos: [],
+            mat: isStd
+              ? new THREE.MeshStandardMaterial({
+                  vertexColors: true,
+                  roughness: m.roughness,
+                  metalness: m.metalness,
+                  flatShading: m.flatShading,
+                })
+              : new THREE.MeshBasicMaterial({
+                  vertexColors: true,
+                  toneMapped: m.toneMapped,
+                }),
+            cast: isStd,
+          };
+          groups.set(key, grp);
+        }
+        grp.geos.push(g);
+
+        obj.visible = false;
+        obj.layers.set(31);
+        obj.matrixAutoUpdate = false;
+      });
+
+      for (const { geos, mat, cast } of groups.values()) {
+        if (!geos.length) continue;
+        const mergedGeo = mergeGeometries(geos, false);
+        geos.forEach((gg) => gg.dispose());
+        if (!mergedGeo) continue;
+        const mesh = new THREE.Mesh(mergedGeo, mat);
+        mesh.castShadow = cast;
+        mesh.receiveShadow = cast;
+        mesh.matrixAutoUpdate = false;
+        out.add(mesh);
+      }
+
+      gl.shadowMap.needsUpdate = true;
+      invalidate();
+    };
+
+    // 延迟到挂载后两帧再合并，确保所有异步/GLTF 子对象已 attach 进场景图。
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(run);
+    });
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      disposeOut();
+    };
+  }, [rev, gl, invalidate]);
+
+  return (
+    <>
+      <group ref={rootRef}>{children}</group>
+      <group ref={outRef} />
+    </>
+  );
+}
+
+/**
+ * 在 frameloop="demand" 下以受控帧率驱动渲染。
+ * 既保留呼吸灯/滚动屏等动画观感，又把渲染从 ~60fps 降到 ~30fps；
+ * 窗口不可见/最小化时浏览器自动暂停 requestAnimationFrame → 场景停渲，CPU 归零。
+ */
+function RenderTicker({ fps = 30 }: { fps?: number }) {
+  const invalidate = useThree((s) => s.invalidate);
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    // 家具/场景是静态的，阴影只需算一次，避免每帧重渲整张 shadow map（CPU 大头）。
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+  }, [gl]);
+  useEffect(() => {
+    let raf = 0;
+    let last = 0;
+    const interval = 1000 / fps;
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      if (now - last >= interval) {
+        last = now;
+        invalidate();
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [fps, invalidate]);
+  return null;
+}
+
 /** 智能体 3D 办公室：按任务数布置工位网格。 */
 export function Office3D({
   agentName,
@@ -2100,7 +2288,8 @@ export function Office3D({
         <Canvas
           orthographic
           shadows
-          dpr={[1, 2]}
+          frameloop="demand"
+          dpr={1}
           camera={{
             position: LOCKED_CAMERA_POSITION,
             zoom: LOCKED_CAMERA_ZOOM,
@@ -2108,6 +2297,8 @@ export function Office3D({
             far: 100,
           }}
         >
+          <RenderTicker fps={24} />
+
           <StaticCameraTarget
             position={LOCKED_CAMERA_POSITION}
             target={LOCKED_CAMERA_TARGET}
@@ -2119,10 +2310,15 @@ export function Office3D({
             position={[6, 9, 5]}
             intensity={1.55}
             castShadow
-            shadow-mapSize={[1024, 1024]}
+            shadow-mapSize={[512, 512]}
           />
           <directionalLight position={[-5, 4, -3]} intensity={0.55} />
           <Suspense fallback={null}>
+            <StaticMerger
+              rev={`${agentName}|${cols}x${rows}|${tasks
+                .map((t) => `${t.id}:${t.running ? 1 : 0}`)
+                .join(",")}`}
+            >
             {tasks.map((t, i) => {
               const col = i % cols;
               const row = Math.floor(i / cols);
@@ -2186,6 +2382,7 @@ export function Office3D({
             <CylinderStool position={[-2.6, 0, -7.4]} color="#34363b" />
             {/* 地面 + 接触阴影 */}
             <ContactShadows
+              frames={1}
               position={[WORKSTATION_GROUP_OFFSET_X, 0.018, shadowCenterZ]}
               opacity={0.36}
               scale={14}
@@ -2207,6 +2404,7 @@ export function Office3D({
               <planeGeometry args={[40, 40]} />
               <shadowMaterial transparent opacity={0.16} />
             </mesh>
+            </StaticMerger>
           </Suspense>
         </Canvas>
       </div>

@@ -18,14 +18,15 @@ const LOCKED_CAMERA_TARGET: [number, number, number] = [0, 0.62, -3.2];
 const LOCKED_CAMERA_ZOOM = 100.52;
 const SCENE_FLOOR_COLOR = "#eef2ff";
 const WORKSTATION_GROUP_OFFSET_X = 3.65;
-const WORKSTATION_GROUP_OFFSET_Z = 2.0;
+const WORKSTATION_GROUP_OFFSET_Z = 1.0;
 const WORKSTATION_SCALE = 1.18;
 const PLANTER_SIDE_OFFSET_X = 1.18;
 const RIGHT_STORAGE_ROW_X = -4.2;
-const RIGHT_STORAGE_ROW_Z = 7.1;
+const RIGHT_STORAGE_ROW_Z = 4.1;
 // 后墙固定位置（与柜子解耦，柜子移动时墙不动）。
 const WALL_X = -4.2;
-const WALL_Z = 8.2;
+const WALL_Z = 5.2;
+const WALL_LOGO_TEXT = "OneMind";
 
 function StaticCameraTarget({
   position,
@@ -1216,6 +1217,136 @@ function Fridge({
   );
 }
 
+function WallJellyfishLogo() {
+  const logoTex = useMemo(() => {
+    const c = document.createElement("canvas");
+    c.width = 1024;
+    c.height = 320;
+    const ctx = c.getContext("2d")!;
+
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const cx = 250;
+    const cy = 116;
+
+    ctx.strokeStyle = "rgba(37, 99, 235, 0.58)";
+    ctx.lineWidth = 7;
+    [-58, -30, 0, 30, 58].forEach((offset, index) => {
+      ctx.beginPath();
+      ctx.moveTo(cx + offset, cy + 42);
+      ctx.bezierCurveTo(
+        cx + offset + (index % 2 ? 22 : -18),
+        cy + 88,
+        cx + offset - (index % 2 ? 16 : -22),
+        cy + 124,
+        cx + offset + (index % 2 ? 10 : -10),
+        cy + 168,
+      );
+      ctx.stroke();
+    });
+
+    ctx.strokeStyle = "rgba(20, 184, 166, 0.68)";
+    ctx.lineWidth = 3;
+    [-44, -14, 18, 46].forEach((offset, index) => {
+      ctx.beginPath();
+      ctx.moveTo(cx + offset, cy + 42);
+      ctx.bezierCurveTo(
+        cx + offset - 16,
+        cy + 78,
+        cx + offset + 18,
+        cy + 118,
+        cx + offset - (index % 2 ? 12 : -12),
+        cy + 154,
+      );
+      ctx.stroke();
+    });
+
+    const dome = ctx.createLinearGradient(cx - 108, cy - 70, cx + 108, cy + 72);
+    dome.addColorStop(0, "#38bdf8");
+    dome.addColorStop(0.55, "#14b8a6");
+    dome.addColorStop(1, "#6366f1");
+    ctx.shadowColor = "rgba(20, 184, 166, 0.26)";
+    ctx.shadowBlur = 22;
+    ctx.fillStyle = dome;
+    ctx.beginPath();
+    ctx.moveTo(cx - 106, cy + 22);
+    ctx.bezierCurveTo(cx - 92, cy - 72, cx + 92, cy - 72, cx + 106, cy + 22);
+    ctx.bezierCurveTo(cx + 72, cy + 58, cx - 72, cy + 58, cx - 106, cy + 22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(cx - 70, cy + 26);
+    ctx.quadraticCurveTo(cx - 46, cy + 46, cx - 24, cy + 26);
+    ctx.quadraticCurveTo(cx, cy + 48, cx + 24, cy + 26);
+    ctx.quadraticCurveTo(cx + 46, cy + 46, cx + 70, cy + 26);
+    ctx.stroke();
+
+    [
+      [cx - 35, cy - 8, 10],
+      [cx + 8, cy - 25, 8],
+      [cx + 42, cy + 4, 7],
+    ].forEach(([x, y, r]) => {
+      ctx.fillStyle = "rgba(255, 255, 255, 0.38)";
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    const textX = 410;
+    const textY = 204;
+    ctx.textAlign = "start";
+    ctx.font = "700 112px Inter, Avenir, Helvetica, Arial, sans-serif";
+    const textWidth = ctx.measureText(WALL_LOGO_TEXT).width;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.78)";
+    ctx.lineWidth = 12;
+    ctx.strokeText(WALL_LOGO_TEXT, textX, textY);
+    ctx.fillStyle = "#111827";
+    ctx.fillText(WALL_LOGO_TEXT, textX, textY);
+
+    const underlineY = textY + 32;
+    const underline = ctx.createLinearGradient(textX, 0, textX + textWidth, 0);
+    underline.addColorStop(0, "#38bdf8");
+    underline.addColorStop(0.56, "#14b8a6");
+    underline.addColorStop(1, "#6366f1");
+    ctx.strokeStyle = underline;
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(textX, underlineY);
+    ctx.lineTo(textX + textWidth, underlineY);
+    ctx.stroke();
+
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.center.set(0.5, 0.5);
+    t.repeat.x = -1;
+    t.repeat.y = -1;
+    return t;
+  }, []);
+
+  return (
+    <mesh
+      position={[WALL_X + 5.2, 1.48, WALL_Z - 0.8]}
+      rotation={[-Math.PI, 0, 0]}
+      renderOrder={3}
+    >
+      <planeGeometry args={[4.25, 1.32]} />
+      <meshBasicMaterial
+        map={logoTex}
+        transparent
+        alphaTest={0.03}
+        depthWrite={false}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+}
+
 /** 双人沙发（2 座）：与 3 座沙发相同的黑色皮质材质。 */
 function Loveseat(props: {
   position: [number, number, number];
@@ -1937,13 +2068,12 @@ export function Office3D({
   const cols = Math.min(2, Math.max(1, tasks.length));
   const rows = Math.ceil(tasks.length / cols);
   const gapX = 2.45;
-  const gapZ = 6.0;
+  const gapZ = 5.0;
   const shadowCenterZ = WORKSTATION_GROUP_OFFSET_Z - ((rows - 1) / 2) * gapZ;
   const visualRightDeskX =
     WORKSTATION_GROUP_OFFSET_X - ((cols - 1) / 2) * gapX;
   const planterX = visualRightDeskX - PLANTER_SIDE_OFFSET_X;
   const hasStartedTasks = tasks.some((task) => task.running);
-  const runningTaskCount = tasks.filter((task) => task.running).length;
   const windowsScreenIndex = hasStartedTasks && tasks.length > 1 ? 1 : 0;
   const idleCfCandidates = tasks
     .map((task, index) => ({ index, idle: index !== 0 && !task.running }))
@@ -1966,9 +2096,6 @@ export function Office3D({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-visible bg-transparent">
-      <div className="shrink-0 px-0 pb-1 text-left text-sm font-medium text-foreground">
-        {agentName} 办公室 · {runningTaskCount} 个任务进行中
-      </div>
       <div className="relative min-h-0 flex-1 w-full overflow-hidden">
         <Canvas
           orthographic
@@ -2033,29 +2160,30 @@ export function Office3D({
               />
             ))}
             {/* 后墙（固定位置，不随柜子移动） */}
-            <mesh position={[WALL_X, 1.4, WALL_Z]} receiveShadow>
+            {/* <mesh position={[WALL_X, 1.4, WALL_Z]} receiveShadow>
               <boxGeometry args={[20, 1.56, 0.1]} />
               <meshBasicMaterial color="#ffffff" toneMapped={false} />
-            </mesh>
+            </mesh> */}
+            <WallJellyfishLogo />
             {/* 墙脚踢脚线 */}
-            <mesh position={[WALL_X, 0.55, WALL_Z - 0.03]}>
+            <mesh position={[WALL_X, 0.55, WALL_Z - 0.53]}>
               <boxGeometry args={[20, 0.1, 0.08]} />
               <meshStandardMaterial color="#f7f8fa" roughness={0.9} />
             </mesh>
             <StorageCabinetRow />
             <SmallCabinet />
             {/* 冰箱（场景最上方、靠后墙，门朝向 3D 区下方/相机） */}
-            <Fridge position={[-1.9, 0, 7.2]} height={1.95} rotationY={0} />
+            <Fridge position={[-1.9, 0, 4.2]} height={1.65} rotationY={0} />
             {/* 自造办公室长书柜（多格书架，书脊朝相机） */}
-            <Bookcase position={[-4.0, 0, -3.2]} height={1.9} width={3.6} rotationY={Math.PI} />
+            <Bookcase position={[-4.0, 0, -2.2]} height={1.9} width={3.6} rotationY={Math.PI} />
             {/* 沙发（书柜前方，正面朝相机） */}
-            <Sofa position={[-4.2, 0, -6.5]} height={1.0} rotationY={Math.PI} stretchX={1.15} />
+            <Sofa position={[-4.2, 0, -5.5]} height={1.0} rotationY={Math.PI} stretchX={1.15} />
             {/* 茶几（沙发前方） */}
-            <CoffeeTable position={[-4.2, 0, -8.4]} width={1.5} depth={0.8} height={0.42} />
+            <CoffeeTable position={[-4.2, 0, -7.4]} width={1.5} depth={0.8} height={0.42} />
             {/* 双人沙发（茶几另一侧，与 3 座沙发面对面） */}
-            <Loveseat position={[-4.2, 0, -11.1]} height={0.95} rotationY={0} />
+            <Loveseat position={[-4.2, 0, -10.1]} height={0.95} rotationY={0} />
             {/* 单个皮质小圆筒座椅（茶几左侧，灰黑色皮革） */}
-            <CylinderStool position={[-2.6, 0, -8.4]} color="#34363b" />
+            <CylinderStool position={[-2.6, 0, -7.4]} color="#34363b" />
             {/* 地面 + 接触阴影 */}
             <ContactShadows
               position={[WORKSTATION_GROUP_OFFSET_X, 0.018, shadowCenterZ]}

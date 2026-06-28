@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useSettings } from "@/hooks/useSettings";
 import { WorkspaceSidebar, type Mode } from "./workspace-sidebar";
@@ -8,12 +8,10 @@ import { AddAgentView } from "./add-agent-view";
 import { BoardView } from "./board-view";
 import { Conversation } from "@/components/ai-elements/conversation";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
-import { cn } from "@/lib/utils";
 
-const SIDEBAR_MIN = 220;
-const SIDEBAR_MAX = 460;
+const SIDEBAR_WIDTH = 220;
 
-/** 工作台容器：可折叠/可拖拽侧栏 + （空状态欢迎页 / 对话区 + 底部输入）+ 设置面板。 */
+/** 工作台容器：固定宽度侧栏 + （空状态欢迎页 / 对话区 + 底部输入）+ 设置面板。 */
 export function Workspace() {
   const {
     agents,
@@ -48,47 +46,14 @@ export function Workspace() {
       ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
     );
 
-  // 侧栏宽度（可拖拽）
-  const [sidebarWidth, setSidebarWidth] = useState(264);
-  const [isResizing, setIsResizing] = useState(false);
-  const resizingRef = useRef(false);
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!resizingRef.current) return;
-      const w = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX));
-      setSidebarWidth(w);
-    };
-    const onUp = () => {
-      if (!resizingRef.current) return;
-      resizingRef.current = false;
-      setIsResizing(false);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, []);
-
-  const startResize = () => {
-    resizingRef.current = true;
-    setIsResizing(true);
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  };
-
   const empty = items.length === 0;
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background text-foreground">
       <WorkspaceSidebar
         collapsed={collapsed}
-        width={sidebarWidth}
-        animate={!isResizing}
+        width={SIDEBAR_WIDTH}
+        animate
         onToggle={() => setCollapsed((c) => !c)}
         connected={connected}
         conversations={conversations}
@@ -105,23 +70,6 @@ export function Workspace() {
         }
         onOpenSettings={() => setSettingsOpen(true)}
       />
-
-      {/* 拖拽手柄（折叠时隐藏）。-mx 让命中区跨在侧栏边线上，不占布局宽度。 */}
-      {!collapsed && (
-        <div
-          onMouseDown={startResize}
-          className="group relative z-10 -mx-1 w-2 shrink-0 cursor-col-resize"
-        >
-          <div
-            className={cn(
-              "pointer-events-none absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 transition-colors",
-              isResizing
-                ? "bg-primary/60"
-                : "bg-transparent group-hover:bg-primary/40",
-            )}
-          />
-        </div>
-      )}
 
       <div className="flex min-w-0 flex-1 flex-col">
         {view === "addAgent" ? (

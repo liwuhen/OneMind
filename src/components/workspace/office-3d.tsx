@@ -28,6 +28,8 @@ const RIGHT_STORAGE_ROW_Z = 4.1;
 const WALL_X = -4.2;
 const WALL_Z = 5.2;
 const WALL_LOGO_TEXT = "OneMind";
+const ACTIVE_OFFICE_FPS = 12;
+const IDLE_OFFICE_FPS = 2;
 
 function StaticCameraTarget({
   position,
@@ -241,12 +243,14 @@ function MonitorScreen({
   }, [seed]);
 
   const lastDrawRef = useRef(-1);
+  const lastStaticFrameKeyRef = useRef("");
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
-    // 屏幕贴图限速重绘：动态画面（code/cf）~10fps，静态锁屏/桌面 ~2fps。
+    // 屏幕贴图限速重绘：动态画面（code/cf）~6fps，静态锁屏/桌面最多每秒检查一次。
     // 否则每帧都会重画 2D 画布并重传纹理，是主线程高 CPU + GC 抖动的主因。
-    const minInterval = mode === "lock" || mode === "windows" ? 0.5 : 0.12;
+    const staticMode = mode === "lock" || mode === "windows";
+    const minInterval = staticMode ? 1 : 0.16;
     if (t - lastDrawRef.current < minInterval) return;
     lastDrawRef.current = t;
 
@@ -254,6 +258,19 @@ function MonitorScreen({
     if (!ctx) return;
     const W = canvas.width;
     const H = canvas.height;
+    let staticTimeLabel = "";
+
+    if (staticMode) {
+      const d = new Date();
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      staticTimeLabel = `${hh}:${mm}`;
+      const frameKey = `${mode}:${staticTimeLabel}`;
+      if (frameKey === lastStaticFrameKeyRef.current) return;
+      lastStaticFrameKeyRef.current = frameKey;
+    } else {
+      lastStaticFrameKeyRef.current = "";
+    }
 
     // 锁屏样式（无人/未起任务）。
     if (mode === "lock") {
@@ -275,13 +292,10 @@ function MonitorScreen({
       ctx.fillStyle = "#2b2442";
       ctx.fillRect(lx - 2, ly + 6, 4, 7);
       // 时间
-      const d = new Date();
-      const hh = String(d.getHours()).padStart(2, "0");
-      const mm = String(d.getMinutes()).padStart(2, "0");
       ctx.textAlign = "center";
       ctx.fillStyle = "rgba(255,255,255,0.94)";
       ctx.font = "bold 36px sans-serif";
-      ctx.fillText(`${hh}:${mm}`, W / 2, 108);
+      ctx.fillText(staticTimeLabel, W / 2, 108);
       ctx.fillStyle = "rgba(255,255,255,0.55)";
       ctx.font = "13px sans-serif";
       ctx.fillText("已锁定", W / 2, 130);
@@ -328,13 +342,10 @@ function MonitorScreen({
         ctx.fillRect(40 + i * 22, H - barH + 6, 14, 11);
       });
       // 时间（任务栏右侧）
-      const d = new Date();
-      const hh = String(d.getHours()).padStart(2, "0");
-      const mm = String(d.getMinutes()).padStart(2, "0");
       ctx.fillStyle = "rgba(255,255,255,0.9)";
       ctx.font = "10px sans-serif";
       ctx.textAlign = "right";
-      ctx.fillText(`${hh}:${mm}`, W - 8, H - 8);
+      ctx.fillText(staticTimeLabel, W - 8, H - 8);
       ctx.textAlign = "left";
       texture.needsUpdate = true;
       return;
@@ -461,8 +472,7 @@ function MonitorScreen({
   );
 }
 
-/** 桌面主机：带前面板、散热孔和随任务色呼吸的状态灯。 */
-function ComputerTower({ accent, seed }: { accent: string; seed: number }) {
+function TowerPulseLights({ accent, seed }: { accent: string; seed: number }) {
   const powerMaterial = useRef<THREE.MeshBasicMaterial>(null);
   const stripMaterial = useRef<THREE.MeshBasicMaterial>(null);
 
@@ -473,15 +483,7 @@ function ComputerTower({ accent, seed }: { accent: string; seed: number }) {
   });
 
   return (
-    <group position={[0.62, 0.86, 0.55]}>
-      <mesh castShadow>
-        <boxGeometry args={[0.14, 0.3, 0.34]} />
-        <meshStandardMaterial color="#23242b" roughness={0.55} metalness={0.18} />
-      </mesh>
-      <mesh castShadow position={[0, 0, -0.174]}>
-        <boxGeometry args={[0.116, 0.26, 0.006]} />
-        <meshStandardMaterial color="#151820" roughness={0.7} />
-      </mesh>
+    <>
       <mesh position={[-0.047, 0, -0.18]}>
         <boxGeometry args={[0.012, 0.22, 0.008]} />
         <meshBasicMaterial
@@ -492,6 +494,70 @@ function ComputerTower({ accent, seed }: { accent: string; seed: number }) {
           toneMapped={false}
         />
       </mesh>
+      <mesh position={[0.036, 0.096, -0.182]}>
+        <circleGeometry args={[0.018, 24]} />
+        <meshBasicMaterial
+          ref={powerMaterial}
+          color={accent}
+          transparent
+          opacity={0.7}
+          toneMapped={false}
+        />
+      </mesh>
+    </>
+  );
+}
+
+function TowerStaticLights({ accent }: { accent: string }) {
+  return (
+    <>
+      <mesh position={[-0.047, 0, -0.18]}>
+        <boxGeometry args={[0.012, 0.22, 0.008]} />
+        <meshBasicMaterial
+          color={accent}
+          transparent
+          opacity={0.28}
+          toneMapped={false}
+        />
+      </mesh>
+      <mesh position={[0.036, 0.096, -0.182]}>
+        <circleGeometry args={[0.018, 24]} />
+        <meshBasicMaterial
+          color={accent}
+          transparent
+          opacity={0.35}
+          toneMapped={false}
+        />
+      </mesh>
+    </>
+  );
+}
+
+/** 桌面主机：带前面板、散热孔和随任务色呼吸的状态灯。 */
+function ComputerTower({
+  accent,
+  seed,
+  active,
+}: {
+  accent: string;
+  seed: number;
+  active: boolean;
+}) {
+  return (
+    <group position={[0.62, 0.86, 0.55]}>
+      <mesh castShadow>
+        <boxGeometry args={[0.14, 0.3, 0.34]} />
+        <meshStandardMaterial color="#23242b" roughness={0.55} metalness={0.18} />
+      </mesh>
+      <mesh castShadow position={[0, 0, -0.174]}>
+        <boxGeometry args={[0.116, 0.26, 0.006]} />
+        <meshStandardMaterial color="#151820" roughness={0.7} />
+      </mesh>
+      {active ? (
+        <TowerPulseLights accent={accent} seed={seed} />
+      ) : (
+        <TowerStaticLights accent={accent} />
+      )}
       {[-0.07, -0.04, -0.01, 0.02, 0.05].map((y) => (
         <mesh key={y} position={[0.02, y, -0.181]}>
           <boxGeometry args={[0.058, 0.006, 0.008]} />
@@ -504,16 +570,6 @@ function ComputerTower({ accent, seed }: { accent: string; seed: number }) {
           <meshStandardMaterial color="#c9ced6" metalness={0.65} roughness={0.32} />
         </mesh>
       ))}
-      <mesh position={[0.036, 0.096, -0.182]}>
-        <circleGeometry args={[0.018, 24]} />
-        <meshBasicMaterial
-          ref={powerMaterial}
-          color={accent}
-          transparent
-          opacity={0.7}
-          toneMapped={false}
-        />
-      </mesh>
       <mesh position={[0.036, 0.096, -0.181]}>
         <ringGeometry args={[0.022, 0.026, 24]} />
         <meshStandardMaterial color="#5a6070" roughness={0.45} />
@@ -2094,7 +2150,11 @@ function DeskSetup({
       {/* 小盆景 */}
       <DeskPlant seed={seed} />
       {/* 主机 */}
-      <ComputerTower accent={accent} seed={seed} />
+      <ComputerTower
+        accent={accent}
+        seed={seed}
+        active={screen === "code" || screen === "cf"}
+      />
     </>
   );
 }
@@ -2281,10 +2341,10 @@ function StaticMerger({ rev, children }: { rev: string; children: ReactNode }) {
 
 /**
  * 在 frameloop="demand" 下以受控帧率驱动渲染。
- * 既保留呼吸灯/滚动屏等动画观感，又把渲染从 ~60fps 降到 ~30fps；
+ * 既保留呼吸灯/滚动屏等动画观感，又把渲染维持在低帧率；
  * 窗口不可见/最小化时浏览器自动暂停 requestAnimationFrame → 场景停渲，CPU 归零。
  */
-function RenderTicker({ fps = 30 }: { fps?: number }) {
+function RenderTicker({ fps = ACTIVE_OFFICE_FPS }: { fps?: number }) {
   const invalidate = useThree((s) => s.invalidate);
   const gl = useThree((s) => s.gl);
   useEffect(() => {
@@ -2295,16 +2355,44 @@ function RenderTicker({ fps = 30 }: { fps?: number }) {
   useEffect(() => {
     let raf = 0;
     let last = 0;
-    const interval = 1000 / fps;
+    let running = false;
+    const interval = 1000 / Math.max(1, fps);
+
     const tick = (now: number) => {
+      if (!running) return;
       raf = requestAnimationFrame(tick);
       if (now - last >= interval) {
-        last = now;
+        last = now - ((now - last) % interval);
         invalidate();
       }
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+
+    const start = () => {
+      if (running || document.hidden) return;
+      running = true;
+      last = 0;
+      raf = requestAnimationFrame(tick);
+      invalidate();
+    };
+
+    const stop = () => {
+      running = false;
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) stop();
+      else start();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    start();
+
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [fps, invalidate]);
   return null;
 }
@@ -2326,6 +2414,7 @@ export function Office3D({
     WORKSTATION_GROUP_OFFSET_X - ((cols - 1) / 2) * gapX;
   const planterX = visualRightDeskX - PLANTER_SIDE_OFFSET_X;
   const hasStartedTasks = tasks.some((task) => task.running);
+  const officeFps = hasStartedTasks ? ACTIVE_OFFICE_FPS : IDLE_OFFICE_FPS;
   const windowsScreenIndex = hasStartedTasks && tasks.length > 1 ? 1 : 0;
   const idleCfCandidates = tasks
     .map((task, index) => ({ index, idle: index !== 0 && !task.running }))
@@ -2361,7 +2450,7 @@ export function Office3D({
             far: 100,
           }}
         >
-          <RenderTicker fps={24} />
+          <RenderTicker fps={officeFps} />
 
           <StaticCameraTarget
             position={LOCKED_CAMERA_POSITION}

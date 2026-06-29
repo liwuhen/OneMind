@@ -1,9 +1,12 @@
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 
+const MARKDOWN_PLUGINS = [remarkGfm];
+
 /** 轻量 Markdown 渲染（不依赖 typography 插件，用 Tailwind 后代选择器手动排版）。 */
-export function Markdown({
+export const Markdown = memo(function Markdown({
   children,
   className,
 }: {
@@ -29,7 +32,7 @@ export function Markdown({
         className,
       )}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={MARKDOWN_PLUGINS}>{children}</ReactMarkdown>
     </div>
   );
-}
+});

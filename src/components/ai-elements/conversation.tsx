@@ -8,7 +8,8 @@ export function Conversation({ items }: { items: ChatItem[] }) {
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: "smooth" });
+    const el = ref.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [items]);
 
   return (

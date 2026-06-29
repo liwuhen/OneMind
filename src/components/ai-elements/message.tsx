@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Loader2 } from "lucide-react";
 import { Markdown } from "./markdown";
 import { Reasoning } from "./reasoning";
@@ -65,7 +66,7 @@ function SystemMessage({
   );
 }
 
-export function Message({ item }: { item: ChatItem }) {
+export const Message = memo(function Message({ item }: { item: ChatItem }) {
   if (item.role === "user") return <UserMessage text={item.text} />;
   if (item.role === "assistant")
     return (
@@ -75,4 +76,4 @@ export function Message({ item }: { item: ChatItem }) {
       />
     );
   return <SystemMessage level={item.level} text={item.text} />;
-}
+});

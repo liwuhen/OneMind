@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea or enhancement for Creamy.
+about: Suggest an idea or enhancement for OneMind.
 title: ''
 labels: 'enhancement'
 assignees: ''
@@ -13,7 +13,8 @@ What problem are you trying to solve? What is missing or painful today?
 ## Proposed solution
 
 What you would like to happen. If it touches a specific area, note which:
-the hook pipeline, a channel (CLI / Telegram / Feishu), tools, skills, or tapes.
+Tauri shell, React UI, 3D workspace, agent registry, session protocol, settings,
+or local workspace handling.
 
 ## Alternatives considered
 

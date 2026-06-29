@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a bug to help improve Creamy.
+about: Report a bug to help improve OneMind.
 title: ''
 labels: 'bug'
 assignees: ''
@@ -12,10 +12,13 @@ A clear and concise description of what the bug is.
 
 ## To reproduce
 
-Steps to reproduce the behavior. A minimal command or snippet is ideal:
+Steps to reproduce the behavior. Include the selected agent, workspace path, and
+the command or UI flow that triggered the issue.
 
 ```bash
-uv run creamy run "..."     # or: uv run creamy chat / uv run creamy gateway
+npm run tauri dev
+# or:
+npm run build
 ```
 
 ## Expected behavior
@@ -33,14 +36,16 @@ secrets** first:
 
 ## Environment
 
-- Creamy version or git commit SHA:
-- Python version (`python --version`):
-- OS (e.g. Ubuntu 24.04, macOS 14):
-- Channel (CLI / Telegram / Feishu):
-- Model (`CREAMY_MODEL`, e.g. `openai:gpt-4o`):
-- Installed via (`uv sync` / pip / plugin):
+- OneMind version or git commit SHA:
+- OS (e.g. Ubuntu 24.04, Windows 11, macOS 14):
+- App mode (Tauri dev / packaged app / browser preview):
+- Node.js version (`node --version`):
+- npm version (`npm --version`):
+- Rust version (`rustc --version`):
+- Selected agent or protocol (e.g. Claude Code, Codex, generic JSONL):
+- Workspace path:
 
 ## Additional context
 
-Relevant config (redact secrets), enabled plugins/skills, or anything else that
-helps narrow it down.
+Relevant `.agents` config, logs, screenshots, or recordings. Redact API keys,
+tokens, local secrets, and private workspace content before posting.
